@@ -1,6 +1,6 @@
 # Configuración de la pantalla
-ANCHO = 800
-ALTO = 600
+ANCHO = 900
+ALTO = 650
 
 # Colores
 BLANCO = (255, 255, 255)

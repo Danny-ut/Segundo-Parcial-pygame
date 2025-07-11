@@ -8,6 +8,10 @@ from preguntas import *
 
 class Juego:
     def __init__(self):
+        '''
+        Inicializa los atributos principales del juego, incluyendo el estado, jugador, puntaje,
+        temporizador, tablero, sonidos, fuentes y puntajes previos.
+        '''
         self.estado = MENU
         self.jugador = ""
         self.puntaje = 0
@@ -22,20 +26,35 @@ class Juego:
         self.cargar_puntajes()
         self.cargar_recursos()
         self.inicializar_fuentes()
+        self.esperando_confirmacion = False
+        self.respuesta_confirmacion = None
+        self.pregunta_actual = None  
         
     def inicializar_fuentes(self):
+        '''
+        Carga las fuentes de texto que se usarán para mostrar textos en pantalla,
+        con diferentes tamaños y estilos.
+        '''
         self.fuente_peq = pygame.font.SysFont("Arial", TAMANO_FUENTE_PEQ)
         self.fuente_med = pygame.font.SysFont("Arial", TAMANO_FUENTE_MED, bold=True)
         self.fuente_grande = pygame.font.SysFont("Arial", TAMANO_FUENTE_GRANDE, bold=True)
     
     def cargar_recursos(self):
+        '''
+        Intenta cargar los archivos de sonido para respuestas correctas e incorrectas.
+        Si no los encuentra, el juego continúa sin sonidos.
+        '''
         try:
-            self.sonido_correcto = pygame.mixer.Sound("C:/Users/danie/OneDrive/Escritorio/UTN/Programacion 1/Segundo Parcial/Serpientes y escaleras pygame/sonidos/correcto.wav")
-            self.sonido_incorrecto = pygame.mixer.Sound("C:/Users/danie/OneDrive/Escritorio/UTN/Programacion 1/Segundo Parcial/Serpientes y escaleras pygame/sonidos/incorrecto.wav")
+            self.sonido_correcto = pygame.mixer.Sound("sonidos/correcto.wav")
+            self.sonido_incorrecto = pygame.mixer.Sound("sonidos/incorrecto.wav")
         except:
             print("Sonidos no encontrados. Continuando sin ellos.")
     
     def cargar_puntajes(self):
+        '''
+        Carga los puntajes guardados desde un archivo JSON.
+        Si el archivo no existe o hay error, inicia con una lista vacía.
+        '''
         try:
             with open("puntajes.json", "r") as archivo:
                 self.puntajes = json.load(archivo)
@@ -43,15 +62,25 @@ class Juego:
             self.puntajes = []
     
     def guardar_puntaje(self):
+        '''
+        Agrega el puntaje actual al ranking, lo ordena y lo guarda en el archivo JSON.
+        '''
         self.puntajes.append({"nombre": self.jugador, "puntaje": self.puntaje})
         self.puntajes.sort(key=lambda x: x["puntaje"], reverse=True)
         with open("puntajes.json", "w") as archivo:
             json.dump(self.puntajes, archivo)
     
     def obtener_pregunta_aleatoria(self):
+        '''
+        Devuelve una pregunta aleatoria de la lista de preguntas cargadas.
+        '''
         return random.choice(self.preguntas)
     
     def dibujar_menu(self):
+        '''
+        Dibuja el menú principal, que incluye el título, campo de nombre,
+        y los botones de Jugar, Ver Puntajes y Salir.
+        '''
         pantalla = pygame.display.get_surface()
         pantalla.fill(AZUL_CLARO)
         
@@ -75,32 +104,94 @@ class Juego:
         pantalla.blit(salir_texto, (ANCHO//2 - salir_texto.get_width()//2, 455))
     
     def dibujar_pregunta(self):
+        '''
+        Muestra la pregunta actual en pantalla, dividida en líneas si es necesario,
+        junto con las opciones de respuesta.
+        '''
         pantalla = pygame.display.get_surface()
-        pygame.draw.rect(pantalla, BLANCO, (100, 250, 600, 120))
-        pygame.draw.rect(pantalla, NEGRO, (100, 250, 600, 120), 2)
+        pygame.draw.rect(pantalla, AZUL_CLARO, (50, 200, 800, 150))
+        pygame.draw.rect(pantalla, NEGRO, (50, 200, 800, 150), 2)
         
-        pregunta_texto = self.fuente_med.render(self.pregunta_actual["pregunta"], True, NEGRO)
-        pantalla.blit(pregunta_texto, (110, 260))
+        pregunta_lines = self.wrap_text(self.pregunta_actual["pregunta"], self.fuente_med, 780)
+        for i, line in enumerate(pregunta_lines):
+            pregunta_texto = self.fuente_med.render(line, True, NEGRO)
+            pantalla.blit(pregunta_texto, (60, 210 + i * 30))
         
+        # Opciones
         for i, opcion in enumerate(self.pregunta_actual["opciones"]):
-            opcion_x = 150 + i * 200
-            pygame.draw.rect(pantalla, AMARILLO, (opcion_x, 320, 150, 40))
-            pygame.draw.rect(pantalla, NEGRO, (opcion_x, 320, 150, 40), 2)
+            opcion_x = 100 + i * 250
+            pygame.draw.rect(pantalla, AMARILLO, (opcion_x, 350, 200, 40))
+            pygame.draw.rect(pantalla, NEGRO, (opcion_x, 350, 200, 40), 2)
             
             opcion_texto = self.fuente_peq.render(opcion, True, NEGRO)
-            pantalla.blit(opcion_texto, (opcion_x + 75 - opcion_texto.get_width()//2, 340 - opcion_texto.get_height()//2))
+            pantalla.blit(opcion_texto, (opcion_x + 100 - opcion_texto.get_width()//2, 370 - opcion_texto.get_height()//2))
+    
+    def wrap_text(self, text, font, max_width):
+        '''
+        Divide un texto largo en múltiples líneas que no excedan el ancho máximo indicado.
+        Parámetros:
+        - text: texto completo a dividir
+        - font: fuente usada para medir el ancho del texto
+        - max_width: ancho máximo por línea en píxeles
+        '''
+        words = text.split(' ')
+        lines = []
+        current_line = []
+        
+        for word in words:
+            test_line = ' '.join(current_line + [word])
+            width = font.size(test_line)[0]
+            
+            if width <= max_width:
+                current_line.append(word)
+            else:
+                lines.append(' '.join(current_line))
+                current_line = [word]
+        
+        if current_line:
+            lines.append(' '.join(current_line))
+        
+        return lines
+    
+    def dibujar_confirmacion(self):
+        '''
+        Dibuja la ventana emergente para confirmar si el jugador desea continuar
+        después de responder una pregunta.
+        '''
+        pantalla = pygame.display.get_surface()
+        confirm_rect = pygame.Rect(ANCHO//2 - 200, ALTO//2 - 75, 400, 150)
+        pygame.draw.rect(pantalla, AMARILLO, confirm_rect)
+        pygame.draw.rect(pantalla, NEGRO, confirm_rect, 3)
+        
+        pregunta_texto = self.fuente_med.render("¿Queres seguir jugando?", True, NEGRO)
+        pantalla.blit(pregunta_texto, (ANCHO//2 - pregunta_texto.get_width()//2, ALTO//2 - 50))
+        
+        pygame.draw.rect(pantalla, VERDE, (ANCHO//2 - 150, ALTO//2, 120, 40))
+        si_texto = self.fuente_med.render("Sí", True, NEGRO)
+        pantalla.blit(si_texto, (ANCHO//2 - 90 - si_texto.get_width()//2, ALTO//2 + 20 - si_texto.get_height()//2))
+        
+        pygame.draw.rect(pantalla, ROJO, (ANCHO//2 + 30, ALTO//2, 120, 40))
+        no_texto = self.fuente_med.render("No", True, NEGRO)
+        pantalla.blit(no_texto, (ANCHO//2 + 90 - no_texto.get_width()//2, ALTO//2 + 20 - no_texto.get_height()//2))
     
     def dibujar_mensaje(self):
+        '''
+        Muestra un mensaje temporal en el centro de la pantalla durante 2 segundos,
+        como feedback visual tras una respuesta.
+        '''
         if self.mostrar_mensaje and pygame.time.get_ticks() - self.tiempo_mensaje < 2000:
             pantalla = pygame.display.get_surface()
-            mensaje_rect = pygame.Rect(ANCHO//2 - 200, ALTO//2 - 25, 400, 50)
-            pygame.draw.rect(pantalla, AMARILLO, mensaje_rect)
+            mensaje_rect = pygame.Rect(ANCHO//2 - 400, ALTO//2 - 25, 800, 50)
+            pygame.draw.rect(pantalla, GRIS, mensaje_rect)
             pygame.draw.rect(pantalla, NEGRO, mensaje_rect, 2)
             
             mensaje_texto = self.fuente_med.render(self.mensaje, True, NEGRO)
             pantalla.blit(mensaje_texto, (ANCHO//2 - mensaje_texto.get_width()//2, ALTO//2 - mensaje_texto.get_height()//2))
     
     def dibujar_puntajes(self):
+        '''
+        Muestra los mejores puntajes guardados, ordenados, y una opción para volver al menú.
+        '''
         pantalla = pygame.display.get_surface()
         pantalla.fill(BLANCO)
         
@@ -120,6 +211,10 @@ class Juego:
         pantalla.blit(volver_texto, (ANCHO//2 - volver_texto.get_width()//2, 560))
     
     def dibujar_fin_juego(self):
+        '''
+        Dibuja la pantalla de fin del juego, mostrando el puntaje final del jugador
+        y su posición en el ranking.
+        '''
         pantalla = pygame.display.get_surface()
         pantalla.fill(BLANCO)
         
@@ -142,6 +237,12 @@ class Juego:
         pantalla.blit(menu_texto, (ANCHO//2 - menu_texto.get_width()//2, 365))
     
     def manejar_eventos_menu(self, evento):
+        '''
+        Gestiona los eventos que ocurren en el menú: ingreso de nombre por teclado,
+        clics sobre los botones de Jugar, Ver Puntajes o Salir.
+        Parámetros:
+        - evento: evento de teclado o mouse capturado por pygame
+        '''
         if evento.type == KEYDOWN:
             if evento.key == K_BACKSPACE:
                 self.jugador = self.jugador[:-1]
@@ -163,20 +264,13 @@ class Juego:
             elif ANCHO//2 - 100 <= x <= ANCHO//2 + 100 and 440 <= y <= 490:
                 pygame.quit()
     
-    def manejar_eventos_jugando(self, evento):
-        if evento.type == MOUSEBUTTONDOWN:
-            x, y = evento.pos
-            
-            for i in range(3):
-                if 150 + i * 200 <= x <= 150 + i * 200 + 150 and 320 <= y <= 360:
-                    self.verificar_respuesta(i)
-        
-        elif evento.type == KEYDOWN:
-            if evento.key == K_ESCAPE:
-                self.estado = FIN_JUEGO
-                self.guardar_puntaje()
-    
     def verificar_respuesta(self, opcion):
+        '''
+        Evalúa si la respuesta seleccionada es correcta o no, reproduce sonidos,
+        muestra mensajes y actualiza la posición del jugador según reglas del tablero.
+        Parámetros:
+        - opcion: índice de la opción seleccionada (0, 1, 2) o -1 si se acabó el tiempo
+        '''
         correcta = opcion == self.pregunta_actual["correcta"]
         movimiento = 1
         mensaje = ""
@@ -211,7 +305,9 @@ class Juego:
         self.mensaje = mensaje
         self.mostrar_mensaje = True
         self.tiempo_mensaje = pygame.time.get_ticks()
-
+        self.esperando_confirmacion = True
+        self.respuesta_confirmacion = None
+        
         if self.posicion == 1:
             self.estado = FIN_JUEGO
             self.mensaje = "¡Has caído al inicio! Fin del juego."
@@ -222,24 +318,82 @@ class Juego:
             self.guardar_puntaje()
         else:
             self.pregunta_actual = self.obtener_pregunta_aleatoria()
-            self.tiempo_restante = TIEMPO_PREGUNTA
+            self.tiempo_restante = TIEMPO_PREGUNTA  
             self.ultimo_tiempo = pygame.time.get_ticks()
     
-    def actualizar_tiempo(self):
-        ahora = pygame.time.get_ticks()
-        if ahora - self.ultimo_tiempo >= 1000:
-            self.tiempo_restante -= 1
-            self.ultimo_tiempo = ahora
+    def manejar_eventos_jugando(self, evento):
+        '''
+        Gestiona los eventos durante la partida: clics en respuestas, escape para salir,
+        o confirmar si se desea continuar tras responder.
+        Parámetros:
+        - evento: evento de pygame (mouse o teclado)
+        '''
+        if self.esperando_confirmacion:
+            if evento.type == MOUSEBUTTONDOWN:
+                x, y = evento.pos
+                
+                # Botón Sí
+                if ANCHO//2 - 150 <= x <= ANCHO//2 - 30 and ALTO//2 <= y <= ALTO//2 + 40:
+                    self.esperando_confirmacion = False
+                    if self.posicion == 1:
+                        self.estado = FIN_JUEGO
+                        self.guardar_puntaje()
+                    elif self.posicion >= CASILLEROS_TOTALES:
+                        self.estado = FIN_JUEGO
+                        self.puntaje += PUNTOS_META
+                        self.guardar_puntaje()
+                    else:
+                        self.pregunta_actual = self.obtener_pregunta_aleatoria()
+                        self.tiempo_restante = TIEMPO_PREGUNTA
+                        self.ultimo_tiempo = pygame.time.get_ticks()
+                
+                # Botón No
+                elif ANCHO//2 + 30 <= x <= ANCHO//2 + 150 and ALTO//2 <= y <= ALTO//2 + 40:
+                    self.esperando_confirmacion = False
+                    self.estado = FIN_JUEGO
+                    self.guardar_puntaje()
+        
+        elif evento.type == MOUSEBUTTONDOWN:
+            x, y = evento.pos
             
-            if self.tiempo_restante <= 0:
-                self.verificar_respuesta(-1)
+            for i in range(3):
+                if 150 + i * 250 <= x <= 150 + i * 250 + 200 and 350 <= y <= 390:
+                    self.verificar_respuesta(i)
+        
+        elif evento.type == KEYDOWN:
+            if evento.key == K_ESCAPE:
+                self.estado = FIN_JUEGO
+                self.guardar_puntaje()
+    
+    def actualizar_tiempo(self):
+        '''
+        Reduce el contador de tiempo cada segundo. Si llega a cero, verifica automáticamente
+        la respuesta como incorrecta.
+        '''
+        if not self.esperando_confirmacion:  
+            ahora = pygame.time.get_ticks()
+            if ahora - self.ultimo_tiempo >= 1000:
+                self.tiempo_restante -= 1
+                self.ultimo_tiempo = ahora
+            
+                if self.tiempo_restante <= 0:
+                    self.tiempo_restante = 0
+                    self.verificar_respuesta(-1)
     
     def resetear_juego(self):
+        '''
+        Reinicia el juego para comenzar una nueva partida, restableciendo puntaje, posición
+        y tiempo restante.
+        '''
         self.puntaje = 0
         self.posicion = POSICION_INICIAL
         self.tiempo_restante = TIEMPO_PREGUNTA
     
     def ejecutar(self):
+        '''
+        Función principal que ejecuta el juego. Controla el bucle de eventos, 
+        renderiza pantallas y actualiza el estado del juego según la interacción del usuario.
+        '''
         pantalla = pygame.display.set_mode((ANCHO, ALTO))
         pygame.display.set_caption("Serpientes y Escaleras - Trivia")
         reloj = pygame.time.Clock()
@@ -274,7 +428,10 @@ class Juego:
                 self.dibujar_menu()
             elif self.estado == JUGANDO:
                 self.tablero.dibujar(self.posicion, self.jugador, self.puntaje, self.tiempo_restante)
-                self.dibujar_pregunta()
+                if not hasattr(self, 'esperando_confirmacion') or not self.esperando_confirmacion:
+                    self.dibujar_pregunta()
+                else:
+                    self.dibujar_confirmacion()
                 self.dibujar_mensaje()
             elif self.estado == PUNTAJES:
                 self.dibujar_puntajes()
